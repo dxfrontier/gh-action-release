@@ -1,0 +1,141 @@
+name: Release on PR merge
+description: ''
+inputs:
+  GITHUB_TOKEN:
+    description: 'GITHUB_TOKEN'
+    required: true
+  BRANCH:
+    description: 'Repository branch'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Pull request merged
+      if: github.event.pull_request.merged == true
+      run: echo "Pull request was merged !"
+      shell: bash
+
+    - name: Check labels to proceed versioning
+      if: >
+        contains(github.event.pull_request.labels.*.name, 'version: patch') ||
+        contains(github.event.pull_request.labels.*.name, 'version: minor') ||
+        contains(github.event.pull_request.labels.*.name, 'version: major')
+      run: |
+        echo "Labels found for versioning. Proceeding with version bump."
+        echo "Proceed versioning."
+      shell: bash
+
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Node.js 20.x
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install dependencies
+      run: npm install -g @dxfrontier/sync-mta-version
+      shell: bash
+
+    - name: Determine version bump type
+      id: version-bump-type
+      env:
+        IS_PATCH_FOUND: "${{ contains(github.event.pull_request.labels.*.name, 'version: patch') }}"
+        IS_MINOR_FOUND: "${{ contains(github.event.pull_request.labels.*.name, 'version: minor') }}"
+        IS_MAJOR_FOUND: "${{ contains(github.event.pull_request.labels.*.name, 'version: major') }}"
+      run: |
+        if [ "${IS_PATCH_FOUND}" == "true" ]; then
+          echo "VERSION_BUMP=patch" >> $GITHUB_ENV
+          echo "Version: patch"
+        elif [ "${IS_MINOR_FOUND}" == "true" ]; then
+          echo "VERSION_BUMP=minor" >> $GITHUB_ENV
+          echo "Version: minor"
+        elif [ "${IS_MAJOR_FOUND}" == "true" ]; then
+          echo "VERSION_BUMP=major" >> $GITHUB_ENV
+          echo "Version: major"
+        else
+          exit 0
+        fi
+      shell: bash
+
+    - name: Bump version to package.json
+      id: version-bump
+      run: npm version ${{ env.VERSION_BUMP }} --no-git-tag-version
+      shell: bash
+
+    - name: Apply version bump to package.json, /app/*/package.json, /app/*/webapp/manifest.json
+      id: update-package-version
+      run: |
+        echo "Applying version bump to package.json and manifest.json files."
+        sync-mta-version -f mta.yaml -u /app
+      shell: bash
+
+    - name: Retrieve updated npm version
+      id: package-version
+      uses: martinbeentjes/npm-get-version-action@v1.3.1
+
+    - name: Push GIT tags
+      id: tag
+      uses: anothrNick/github-tag-action@v1
+      env:
+        GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
+        WITH_V: false
+        CUSTOM_TAG: ${{ steps.package-version.outputs.current-version}}
+        BRANCH_HISTORY: full
+
+    # Generate the changelog file using the configuration from cliff.toml.
+    - name: Generate CHANGELOG.md partial
+      id: git-cliff-partial
+      uses: orhun/git-cliff-action@v3
+      with:
+        config: cliff.toml
+        args: -vv --latest --strip header
+      env:
+        OUTPUT: CHANGELOG.md
+        GITHUB_REPO: ${{ github.repository }}
+
+    # Create a GitHub release using the generated changelog content.
+    - name: Publish GitHub Release
+      id: create-release
+      uses: softprops/action-gh-release@v2
+      env:
+        GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
+      with:
+        body: ${{ steps.git-cliff-partial.outputs.content }}
+        tag_name: ${{ steps.git-cliff-partial.outputs.version }}
+        token: ${{ inputs.GITHUB_TOKEN }}
+        prerelease: false
+        draft: false
+        make_latest: true
+
+    # Generate the changelog file based on the cliff.toml file
+    - name: Generate CHANGELOG.md
+      id: git-cliff
+      uses: orhun/git-cliff-action@v4
+      with:
+        config: cliff.toml
+        args: --verbose
+        OUTPUT: CHANGELOG.md
+        GITHUB_REPO: ${{ github.repository }}
+
+    # Move the generated changelog to the root folder and clean up.
+    - name: Move CHANGELOG.md to root directory
+      id: move-log
+      run: |
+        cp ./git-cliff/CHANGELOG.md ./
+        rm ./git-cliff/CHANGELOG.md
+        rmdir ./git-cliff/
+      shell: bash
+
+    - name: Create pull request
+      id: create-pull-request
+      uses: peter-evans/create-pull-request@v5
+      with:
+        branch: feature-version-bump
+        title: 'chore: update version and changelog'
+        body: 'This PR updates the version and changelog.'
+        base: ${{ inputs.BRANCH }}
+        labels: deploy
