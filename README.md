@@ -18,7 +18,7 @@ Ensure you have the following `SemVer GitHub labels` created in your repository:
 - `version: minor`
 - `version: patch`
 
-> [NOTE]
+> [!NOTE]
 > These labels will determine the version bump type for each release.
 
 ## Usage
@@ -61,3 +61,4 @@ jobs:
 
 > [!TIP]
 > Is recommended to use on pull_request instead of on commit to master/main.
+# gh-action-deploy-cf
