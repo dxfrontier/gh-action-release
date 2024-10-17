@@ -17,6 +17,7 @@ runs:
       shell: bash
 
     - name: Check labels to proceed versioning
+      id: proceed-versioning
       if: >
         contains(github.event.pull_request.labels.*.name, 'version: patch') ||
         contains(github.event.pull_request.labels.*.name, 'version: minor') ||
@@ -27,21 +28,25 @@ runs:
       shell: bash
 
     - name: Checkout code
+      if: steps.proceed-versioning.conclusion == 'success'
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
     - name: Set up Node.js 20.x
+      if: steps.proceed-versioning.conclusion == 'success'
       uses: actions/setup-node@v4
       with:
         node-version: '20'
 
     - name: Install dependencies
+      if: steps.proceed-versioning.conclusion == 'success'
       run: npm install -g @dxfrontier/sync-mta-version
       shell: bash
 
     - name: Determine version bump type
       id: version-bump-type
+      if: steps.proceed-versioning.conclusion == 'success'
       env:
         IS_PATCH_FOUND: "${{ contains(github.event.pull_request.labels.*.name, 'version: patch') }}"
         IS_MINOR_FOUND: "${{ contains(github.event.pull_request.labels.*.name, 'version: minor') }}"
@@ -63,11 +68,13 @@ runs:
 
     - name: Bump version to package.json
       id: version-bump
+      if: steps.proceed-versioning.conclusion == 'success'
       run: npm version ${{ env.VERSION_BUMP }} --no-git-tag-version
       shell: bash
 
     - name: Apply version bump to package.json, /app/*/package.json, /app/*/webapp/manifest.json
       id: update-package-version
+      if: steps.proceed-versioning.conclusion == 'success'
       run: |
         echo "Applying version bump to package.json and manifest.json files."
         sync-mta-version -f mta.yaml -u /app
@@ -75,10 +82,12 @@ runs:
 
     - name: Retrieve updated npm version
       id: package-version
+      if: steps.proceed-versioning.conclusion == 'success'
       uses: martinbeentjes/npm-get-version-action@v1.3.1
 
     - name: Push GIT tags
       id: tag
+      if: steps.proceed-versioning.conclusion == 'success'
       uses: anothrNick/github-tag-action@v1
       env:
         GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
@@ -89,6 +98,7 @@ runs:
     # Generate the changelog file using the configuration from cliff.toml.
     - name: Generate CHANGELOG.md partial
       id: git-cliff-partial
+      if: steps.proceed-versioning.conclusion == 'success'
       uses: orhun/git-cliff-action@v3
       with:
         config: cliff.toml
@@ -100,6 +110,7 @@ runs:
     # Create a GitHub release using the generated changelog content.
     - name: Publish GitHub Release
       id: create-release
+      if: steps.proceed-versioning.conclusion == 'success'
       uses: softprops/action-gh-release@v2
       env:
         GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
@@ -114,7 +125,8 @@ runs:
     # Generate the changelog file based on the cliff.toml file
     - name: Generate CHANGELOG.md
       id: git-cliff
-      uses: orhun/git-cliff-action@v4
+      if: steps.proceed-versioning.conclusion == 'success'
+      uses: orhun/git-cliff-action@v3
       with:
         config: cliff.toml
         args: --verbose
@@ -124,13 +136,16 @@ runs:
     # Move the generated changelog to the root folder and clean up.
     - name: Remove git-cliff files
       id: move-log
+      if: steps.proceed-versioning.conclusion == 'success'
       run: |
-        rm -rf git-cliff*
-        rm -rf bin
+        cp ./git-cliff/CHANGELOG.md ./
+        rm ./git-cliff/CHANGELOG.md
+        rmdir ./git-cliff/
       shell: bash
 
     - name: Create pull request
       id: create-pull-request
+      if: steps.proceed-versioning.conclusion == 'success'
       uses: peter-evans/create-pull-request@v5
       with:
         branch: feature-version-bump
