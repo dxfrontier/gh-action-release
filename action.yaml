@@ -11,11 +11,6 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Pull request merged
-      if: github.event.pull_request.merged == true
-      run: echo "Pull request was merged !"
-      shell: bash
-
     - name: Check labels to proceed versioning
       id: proceed-versioning
       if: >
@@ -24,7 +19,12 @@ runs:
         contains(github.event.pull_request.labels.*.name, 'version: major')
       run: |
         echo "Labels found for versioning. Proceeding with version bump."
-        echo "Proceed versioning."
+        echo "Proceed versioning ..."
+      shell: bash
+
+    - name: Pull request merged
+      if: github.event.pull_request.merged == true && steps.proceed-versioning.conclusion == 'success'
+      run: echo "Pull request was merged."
       shell: bash
 
     - name: Checkout code
