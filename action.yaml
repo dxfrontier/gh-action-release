@@ -122,12 +122,11 @@ runs:
         GITHUB_REPO: ${{ github.repository }}
 
     # Move the generated changelog to the root folder and clean up.
-    - name: Move CHANGELOG.md to root directory
+    - name: Remove git-cliff files
       id: move-log
       run: |
-        cp ./git-cliff/CHANGELOG.md ./
-        rm ./git-cliff/CHANGELOG.md
-        rmdir ./git-cliff/
+        rm -rf git-cliff*
+        rm -rf bin
       shell: bash
 
     - name: Create pull request
