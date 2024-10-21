@@ -55,9 +55,8 @@ permissions:
   pull-requests: write
 
 jobs:
-  version_release_job:
+  release:
     runs-on: ubuntu-latest
-
     steps:
       - name: Bump version and create release
         uses: dxfrontier/gh-action-release@main
