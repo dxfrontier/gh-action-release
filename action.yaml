@@ -149,7 +149,7 @@ runs:
       uses: peter-evans/create-pull-request@v5
       with:
         branch: feature-version-bump
-        title: 'chore: update version and changelog'
-        body: 'This PR updates the version and changelog.'
+        commit-message: 'ci: bump version, CHANGELOG.md generated'
+        body: 'This Pull request contains: bump version for the package.json, mta.yaml, CHANGELOG.md updated.'
         base: ${{ inputs.BRANCH }}
         labels: deploy
