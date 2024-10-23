@@ -2,7 +2,7 @@ name: Reelease
 on:
   pull_request:
     branches:
-      - dev
+      - main
     types:
       - closed
 
@@ -19,4 +19,4 @@ jobs:
         uses: dxfrontier/gh-action-release@main
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH: dev
+          BRANCH: main
