@@ -1,0 +1,27 @@
+{
+  "name": "gh-action-release",
+  "version": "1.0.0",
+  "description": "gh-action-release",
+  "license": "MIT",
+  "scripts": {
+    "format:message": "echo 'Prettier started ...'",
+    "format:fix": "prettier . --write",
+    "prepare": "husky",
+    "commit": "commit"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.4.0",
+    "@commitlint/config-conventional": "^19.2.2",
+    "@commitlint/prompt-cli": "^19.4.0",
+    "@commitlint/types": "^19.0.3",
+    "husky": "^9.1.5",
+    "lint-staged": "^15.2.9",
+    "prettier": "3.3.3"
+  },
+  "lint-staged": {
+    "**/*.{yml,yaml}": [
+      "npm run format:message",
+      "npm run format:fix"
+    ]
+  }
+}
