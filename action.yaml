@@ -75,9 +75,20 @@ runs:
     - name: Apply version bump to package.json, /app/*/package.json, /app/*/webapp/manifest.json
       id: update-package-version
       if: steps.proceed-versioning.conclusion == 'success'
+      # Check if mta.yaml exists and conditionally handle the app folder
       run: |
-        echo "Applying version bump to package.json and manifest.json files."
-        sync-mta-version -f mta.yaml -u /app
+        if [ -f "mta.yaml" ]; then
+          echo "mta.yaml found."
+          if [ -d "app" ]; then
+            echo "Applying version bump to package.json and manifest.json files in app."
+            sync-mta-version -f mta.yaml -u /app
+          else
+            echo "Applying version bump to root package.json"
+            sync-mta-version -f mta.yaml
+          fi
+        else
+          echo "Skipping version bump. mta.yaml is missing."
+        fi
       shell: bash
 
     - name: Retrieve updated npm version
