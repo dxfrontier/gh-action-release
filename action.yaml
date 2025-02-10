@@ -110,7 +110,7 @@ runs:
     - name: Generate CHANGELOG.md partial
       id: git-cliff-partial
       if: steps.proceed-versioning.conclusion == 'success'
-      uses: orhun/git-cliff-action@v3
+      uses: orhun/git-cliff-action@v4
       with:
         config: cliff.toml
         args: -vv --latest --strip header
@@ -137,7 +137,7 @@ runs:
     - name: Generate CHANGELOG.md
       id: git-cliff
       if: steps.proceed-versioning.conclusion == 'success'
-      uses: orhun/git-cliff-action@v3
+      uses: orhun/git-cliff-action@v4
       with:
         config: cliff.toml
         args: --verbose
@@ -157,7 +157,7 @@ runs:
     - name: Create pull request
       id: create-pull-request
       if: steps.proceed-versioning.conclusion == 'success'
-      uses: peter-evans/create-pull-request@v5
+      uses: peter-evans/create-pull-request@v7
       with:
         branch: feature-version-bump
         commit-message: 'ci: bump version, CHANGELOG.md generated'
