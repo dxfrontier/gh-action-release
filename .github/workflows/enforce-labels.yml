@@ -1,0 +1,22 @@
+name: Enforce labels
+
+on:
+  pull_request:
+    types: [opened, labeled]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  enforce-label-version-release:
+    name: 'Enforce Labels: version: patch, version: minor, version: major, no_release'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+      - name: Enforce version release labels
+        uses: yogevbd/enforce-label-action@2.2.2
+        with:
+          REQUIRED_LABELS_ANY: 'version: patch,version: minor,version: major,no_release'
+          REQUIRED_LABELS_ANY_DESCRIPTION: "Select at least one label ['version: patch', 'version: minor', 'version: major', 'no_release']"

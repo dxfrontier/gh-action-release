@@ -1,1 +1,21 @@
-# Ignore artifacts
+/.prettierignore
+/.prettierrc.json
+/.devcontainer/devcontainer.json
+/.github/pull_request_template.md
+/.github/ISSUE_TEMPLATE/bug.yml
+/.github/ISSUE_TEMPLATE/feature.yml
+/.github/ISSUE_TEMPLATE/housekeeping.yml
+/.github/ISSUE_TEMPLATE/question.yml
+/cliff.toml
+/.github/workflows/release.yml
+/.github/workflows/enforce-labels.yml
+/.gitattributes
+/.gitignore
+/CHANGELOG.md
+/.vscode/settings.json
+/.husky/commit-msg
+/.husky/pre-commit
+/package-lock.json
+/package.json
+/API.md
+/.commitlintrc.ts

@@ -1,8 +1,4 @@
-#!/usr/bin/env sh
-
-# Install SAP dependencies
-
-npm install -g @sap/cds-dk typescript ts-node
-
-# Install package.json dependencies
+#!/bin/bash
+set -e # Exit on error
+set -x # Print commands for debugging
 npm install
