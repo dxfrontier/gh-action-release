@@ -153,7 +153,6 @@ runs:
         rm ./git-cliff/CHANGELOG.md
         rmdir ./git-cliff/
         rm -rf ./git-cliff*
-        rm -rf ./bin
       shell: bash
 
     - name: Create pull request
