@@ -1,6 +1,6 @@
 {
   "name": "gh-action-release",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "gh-action-release",
   "license": "MIT",
   "scripts": {
