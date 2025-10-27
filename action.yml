@@ -1,15 +1,50 @@
-name: Release on PR merge
-description: ''
+name: 'Release on PR merge'
+description: 'Reusable GitHub Action for automated versioning, changelog generation, and release creation'
+
 inputs:
   GITHUB_TOKEN:
-    description: 'GITHUB_TOKEN'
+    description: 'GitHub token for authentication'
     required: true
+
   BRANCH:
-    description: 'Repository branch'
+    description: 'Target branch for version bump and changelog commits'
     required: true
+    default: 'main'
+
+  WRITE_ACCESS_TOKEN:
+    description: 'Personal Access Token for PR auto-merge (optional, falls back to github-token)'
+    required: false
+
+  ENABLE_AUTO_MERGE:
+    description: 'Enable automatic PR merge after version bump'
+    required: false
+    default: 'false'
+
+  ENABLE_SYNC_MTA:
+    description: 'Enable syncing version to mta.yaml and manifest.json files'
+    required: false
+    default: 'true'
+
+outputs:
+  version:
+    description: 'The new version number'
+    value: ${{ steps.package-version.outputs.current-version }}
+
+  tag:
+    description: 'The git tag created'
+    value: ${{ steps.tag.outputs.new_tag }}
+
+  release-url:
+    description: 'URL of the created GitHub release'
+    value: ${{ steps.create-release.outputs.url }}
+
+  pr-number:
+    description: 'Pull request number for version bump'
+    value: ${{ steps.create-pull-request.outputs.pull-request-number }}
 
 runs:
   using: 'composite'
+
   steps:
     - name: Check labels to proceed versioning
       id: proceed-versioning
@@ -28,25 +63,25 @@ runs:
       shell: bash
 
     - name: Checkout code
-      if: steps.proceed-versioning.conclusion == 'success'
+      if: steps.proceed-versioning.conclusion == 'success' && github.event.pull_request.merged == true
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
-    - name: Set up Node.js 20.x
-      if: steps.proceed-versioning.conclusion == 'success'
+    - name: Setup Node.js
+      if: steps.proceed-versioning.conclusion == 'success' && github.event.pull_request.merged == true
       uses: actions/setup-node@v4
       with:
         node-version: '20'
 
-    - name: Install dependencies
-      if: steps.proceed-versioning.conclusion == 'success'
+    - name: Install sync-mta-version
+      if: steps.proceed-versioning.conclusion == 'success' && github.event.pull_request.merged == true && inputs.ENABLE_SYNC_MTA == 'true'
       run: npm install -g @dxfrontier/sync-mta-version
       shell: bash
 
     - name: Determine version bump type
       id: version-bump-type
-      if: steps.proceed-versioning.conclusion == 'success'
+      if: steps.proceed-versioning.conclusion == 'success' && github.event.pull_request.merged == true
       env:
         IS_PATCH_FOUND: "${{ contains(github.event.pull_request.labels.*.name, 'version: patch') }}"
         IS_MINOR_FOUND: "${{ contains(github.event.pull_request.labels.*.name, 'version: minor') }}"
@@ -67,15 +102,12 @@ runs:
       shell: bash
 
     - name: Bump version to package.json
-      id: version-bump
-      if: steps.proceed-versioning.conclusion == 'success'
+      if: steps.proceed-versioning.conclusion == 'success' && github.event.pull_request.merged == true
       run: npm version ${{ env.VERSION_BUMP }} --no-git-tag-version
       shell: bash
 
     - name: Apply version bump to package.json, /app/*/package.json, /app/*/webapp/manifest.json
-      id: update-package-version
-      if: steps.proceed-versioning.conclusion == 'success'
-      # Check if mta.yaml exists and conditionally handle the app folder
+      if: steps.proceed-versioning.conclusion == 'success' && github.event.pull_request.merged == true && inputs.ENABLE_SYNC_MTA == 'true'
       run: |
         if [ -f "mta.yaml" ]; then
           echo "mta.yaml found."
@@ -91,14 +123,14 @@ runs:
         fi
       shell: bash
 
-    - name: Retrieve updated npm version
+    - name: Get version
       id: package-version
-      if: steps.proceed-versioning.conclusion == 'success'
+      if: steps.proceed-versioning.conclusion == 'success' && github.event.pull_request.merged == true
       uses: martinbeentjes/npm-get-version-action@v1.3.1
 
     - name: Push GIT tags
       id: tag
-      if: steps.proceed-versioning.conclusion == 'success'
+      if: steps.proceed-versioning.conclusion == 'success' && github.event.pull_request.merged == true
       uses: anothrNick/github-tag-action@v1
       env:
         GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
@@ -106,62 +138,97 @@ runs:
         CUSTOM_TAG: ${{ steps.package-version.outputs.current-version}}
         BRANCH_HISTORY: full
 
-    # Generate the changelog file using the configuration from cliff.toml.
-    - name: Generate CHANGELOG.md partial
+    - name: Generate changelog (partial)
       id: git-cliff-partial
-      if: steps.proceed-versioning.conclusion == 'success'
+      if: steps.proceed-versioning.conclusion == 'success' && github.event.pull_request.merged == true
       uses: orhun/git-cliff-action@v4
       with:
         config: cliff.toml
-        args: -vv --latest --strip header
-      env:
-        OUTPUT: CHANGELOG.md
-        GITHUB_REPO: ${{ github.repository }}
+        args: -vv --latest --strip header -o CHANGELOG_PARTIAL.md
 
-    # Create a GitHub release using the generated changelog content.
-    - name: Publish GitHub Release
+    - name: Create GitHub release
       id: create-release
-      if: steps.proceed-versioning.conclusion == 'success'
+      if: steps.proceed-versioning.conclusion == 'success' && github.event.pull_request.merged == true
       uses: softprops/action-gh-release@v2
-      env:
-        GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
       with:
         body: ${{ steps.git-cliff-partial.outputs.content }}
-        tag_name: ${{ steps.git-cliff-partial.outputs.version }}
-        token: ${{ inputs.GITHUB_TOKEN }}
-        prerelease: false
-        draft: false
+        tag_name: ${{ steps.tag.outputs.new_tag }}
         make_latest: true
+      env:
+        GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
 
-    # Generate the changelog file based on the cliff.toml file
-    - name: Generate CHANGELOG.md
-      id: git-cliff
-      if: steps.proceed-versioning.conclusion == 'success'
+    - name: Remove partial changelog
+      if: steps.proceed-versioning.conclusion == 'success' && github.event.pull_request.merged == true
+      run: rm -f CHANGELOG_PARTIAL.md
+      shell: bash
+
+    - name: Generate full changelog
+      if: steps.proceed-versioning.conclusion == 'success' && github.event.pull_request.merged == true
       uses: orhun/git-cliff-action@v4
       with:
         config: cliff.toml
-        args: --verbose
-        OUTPUT: CHANGELOG.md
-        GITHUB_REPO: ${{ github.repository }}
+        args: --verbose -o CHANGELOG.md
 
-    # Move the generated changelog to the root folder and clean up.
-    - name: Remove git-cliff files
-      id: move-log
-      if: steps.proceed-versioning.conclusion == 'success'
+    - name: Commit version bump and changelog
+      if: steps.proceed-versioning.conclusion == 'success' && github.event.pull_request.merged == true
       run: |
-        cp ./git-cliff/CHANGELOG.md ./
-        rm ./git-cliff/CHANGELOG.md
-        rmdir ./git-cliff/
-        rm -rf ./git-cliff*
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        # Safely stage only files that exist; avoid fatal pathspec errors
+        shopt -s nullglob globstar
+        # Stage package files if present
+        pkg_files=(package*.json)
+        if [ ${#pkg_files[@]} -gt 0 ]; then git add "${pkg_files[@]}"; fi
+        # Stage optional files if they exist
+        [ -f CHANGELOG.md ] && git add CHANGELOG.md || true
+        [ -f mta.yaml ] && git add mta.yaml || true
+        manifest_matches=(app/**/manifest.json)
+        if [ ${#manifest_matches[@]} -gt 0 ]; then git add "${manifest_matches[@]}"; fi
+        git commit -m "ci: bump version & update changelog" || echo "No changes to commit"
+        # Make push resilient to remote updates on the target branch
+        git fetch origin feature/version-bump || true
+        git push --force-with-lease origin HEAD:feature/version-bump
       shell: bash
 
     - name: Create pull request
       id: create-pull-request
-      if: steps.proceed-versioning.conclusion == 'success'
+      if: steps.proceed-versioning.conclusion == 'success' && github.event.pull_request.merged == true
       uses: peter-evans/create-pull-request@v7
       with:
-        branch: feature-version-bump
-        commit-message: 'ci: bump version, CHANGELOG.md generated'
-        body: 'This Pull request contains: bump version for the package.json, mta.yaml, CHANGELOG.md updated.'
+        token: ${{ inputs.GITHUB_TOKEN }}
+        commit-message: 'ci: bump version & update CHANGELOG.md'
+        body: 'Automated version bump and changelog update.'
         base: ${{ inputs.BRANCH }}
         labels: deploy
+
+    - name: Auto approve PR (Action)
+      if: steps.create-pull-request.outputs.pull-request-number && inputs.ENABLE_AUTO_MERGE == 'true' && github.event.pull_request.merged == true
+      uses: hmarr/auto-approve-action@v3
+      with:
+        github-token: ${{ inputs.WRITE_ACCESS_TOKEN }}
+        pull-request-number: ${{ steps.create-pull-request.outputs.pull-request-number }}
+
+    - name: Enable auto-merge
+      if: steps.create-pull-request.outputs.pull-request-number && inputs.ENABLE_AUTO_MERGE == 'true' && github.event.pull_request.merged == true
+      run: gh pr merge ${{ steps.create-pull-request.outputs.pull-request-number }} --auto --merge
+      env:
+        GH_TOKEN: ${{ inputs.GITHUB_TOKEN }}
+      shell: bash
+
+    - name: Delete PR branch if merged
+      if: steps.create-pull-request.outputs.pull-request-number && env.ENABLE_AUTO_MERGE == 'true' && github.event.pull_request.merged == true
+      run: |
+        PR_NUMBER=${{ steps.create-pull-request.outputs.pull-request-number }}
+        BRANCH=${{ steps.create-pull-request.outputs.pull-request-branch }}
+        if [ -z "$BRANCH" ]; then
+          BRANCH=$(gh pr view "$PR_NUMBER" --json headRefName --jq .headRefName)
+        fi
+        if gh pr view "$PR_NUMBER" --json merged --jq '.merged' | grep -q true; then
+          echo "Deleting branch $BRANCH"
+          git push origin --delete "$BRANCH" || gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/$BRANCH" || true
+        else
+          echo "PR not merged yet; skipping branch delete"
+        fi
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      shell: bash
